@@ -1,0 +1,24 @@
+# Environment files — never commit these
+renewal-dashboard/.env
+tracksy-fresh/.env
+
+# Dependencies
+renewal-dashboard/node_modules/
+tracksy-fresh/vendor/
+
+# Build output
+renewal-dashboard/dist/
+
+# Database file — contains real user data
+tracksy-fresh/database/database.sqlite
+
+# Laravel cache/logs
+tracksy-fresh/storage/logs/*.log
+tracksy-fresh/bootstrap/cache/*.php
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Kiro IDE specs (optional — remove this line if you want to keep them)
+.kiro/
