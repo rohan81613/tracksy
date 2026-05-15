@@ -1,85 +1,105 @@
-import { useRenewal } from '../../context/RenewalContext';
-import KpiCard from '../ui/KpiCard';
+import { SkeletonCard } from '../ui/Skeleton';
 import { formatCurrency } from '../../utils/renewalUtils';
+import { HiRefresh, HiClock, HiExclamation, HiCurrencyDollar } from 'react-icons/hi';
 
-/**
- * StatsCards — 5 KPI cards for the dashboard
- *
- * Reads `stats` and `isLoading` from RenewalContext.
- * Uses `setCurrentPage` + `setStatusFilter` for navigation on clickable cards.
- */
-export default function StatsCards() {
-  const { stats, isLoading, setCurrentPage, setStatusFilter } = useRenewal();
+function StatCard({ title, value, subtitle, icon: Icon, color, isLoading, active, onClick }) {
+  if (isLoading) return <SkeletonCard />;
 
-  const totalActive    = stats?.totalActive    ?? stats?.total    ?? 0;
-  const dueIn7Days     = stats?.dueIn7Days     ?? 0;
-  const overdue        = stats?.overdue        ?? 0;
-  const monthlySpend   = stats?.monthlySpend   ?? 0;
-  const annualProjected = stats?.annualProjected ?? monthlySpend * 12;
-
-  const handleOverdueClick = () => {
-    setStatusFilter('overdue');
-    setCurrentPage('renewals');
+  const colors = {
+    blue:    { bg: 'bg-blue-50',    icon: 'text-blue-600',    val: 'text-blue-700',    ring: 'ring-blue-400',    activeBg: 'bg-blue-600',    activeIcon: 'bg-blue-500'  },
+    amber:   { bg: 'bg-amber-50',   icon: 'text-amber-600',   val: 'text-amber-700',   ring: 'ring-amber-400',   activeBg: 'bg-amber-500',   activeIcon: 'bg-amber-400' },
+    red:     { bg: 'bg-red-50',     icon: 'text-red-600',     val: 'text-red-700',     ring: 'ring-red-400',     activeBg: 'bg-red-600',     activeIcon: 'bg-red-500'   },
+    emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-600', val: 'text-emerald-700', ring: 'ring-emerald-400', activeBg: 'bg-emerald-600', activeIcon: 'bg-emerald-500' },
   };
-
-  const handleDueSoonClick = () => {
-    setStatusFilter('due-soon');
-    setCurrentPage('renewals');
-  };
+  const c = colors[color] || colors.blue;
 
   return (
-    <div
-      className="flex flex-row gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:overflow-visible"
-      aria-label="Dashboard KPI cards"
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-xl border transition-all duration-150 p-5 focus:outline-none focus:ring-2 focus:ring-offset-1 ${c.ring} ${
+        active
+          ? `${c.activeBg} shadow-md scale-[1.02] border-transparent`
+          : 'bg-white border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 hover:scale-[1.01]'
+      }`}
     >
-      {/* 1. Total Active Renewals */}
-      <div className="min-w-[180px] flex-shrink-0 md:min-w-0">
-        <KpiCard
-          label="Total Active Renewals"
-          value={totalActive}
-          isLoading={isLoading}
-        />
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className={`text-xs font-semibold uppercase tracking-wide ${active ? 'text-white/70' : 'text-gray-400'}`}>
+            {title}
+          </p>
+          <p className={`text-2xl font-bold mt-1.5 ${active ? 'text-white' : c.val}`}>
+            {value}
+          </p>
+          {subtitle && (
+            <p className={`text-xs mt-1 ${active ? 'text-white/60' : 'text-gray-400'}`}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${active ? c.activeIcon : c.bg}`}>
+          <Icon className={active ? 'text-white' : c.icon} size={20} />
+        </div>
       </div>
 
-      {/* 2. Due in 7 Days */}
-      <div className="min-w-[180px] flex-shrink-0 md:min-w-0">
-        <KpiCard
-          label="Due in 7 Days"
-          value={dueIn7Days}
-          isLoading={isLoading}
-          accentColor={dueIn7Days > 0 ? 'var(--color-status-due-soon)' : undefined}
-          onClick={dueIn7Days > 0 ? handleDueSoonClick : undefined}
-        />
-      </div>
+      {/* Active indicator */}
+      {active && (
+        <div className="mt-3 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/80" />
+          <span className="text-[11px] text-white/80 font-medium">Filtered below</span>
+        </div>
+      )}
+    </button>
+  );
+}
 
-      {/* 3. Overdue */}
-      <div className="min-w-[180px] flex-shrink-0 md:min-w-0">
-        <KpiCard
-          label="Overdue"
-          value={overdue}
-          isLoading={isLoading}
-          accentColor={overdue > 0 ? 'var(--color-status-overdue)' : undefined}
-          onClick={overdue > 0 ? handleOverdueClick : undefined}
-        />
-      </div>
+export default function StatsCards({ stats, isLoading, activeCard, onCardClick }) {
+  const s = stats ?? { total: 0, upcoming: 0, overdue: 0, monthlySpend: 0 };
+  const cards = [
+    {
+      key: 'all',
+      title: 'Total Renewals',
+      value: s.total,
+      subtitle: 'All tracked subscriptions',
+      icon: HiRefresh,
+      color: 'blue',
+    },
+    {
+      key: 'upcoming',
+      title: 'Upcoming (30d)',
+      value: s.upcoming,
+      subtitle: 'Renewing soon',
+      icon: HiClock,
+      color: 'amber',
+    },
+    {
+      key: 'overdue',
+      title: 'Overdue',
+      value: s.overdue,
+      subtitle: 'Needs attention',
+      icon: HiExclamation,
+      color: 'red',
+    },
+    {
+      key: 'spend',
+      title: 'Monthly Spend',
+      value: formatCurrency(s.monthlySpend),
+      subtitle: 'Estimated per month',
+      icon: HiCurrencyDollar,
+      color: 'emerald',
+    },
+  ];
 
-      {/* 4. Monthly Recurring Spend */}
-      <div className="min-w-[180px] flex-shrink-0 md:min-w-0">
-        <KpiCard
-          label="Monthly Recurring Spend"
-          value={formatCurrency(monthlySpend)}
-          isLoading={isLoading}
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {cards.map(card => (
+        <StatCard
+          key={card.key}
+          {...card}
+          isLoading={isLoading || !stats}
+          active={activeCard === card.key}
+          onClick={() => onCardClick(card.key)}
         />
-      </div>
-
-      {/* 5. Annual Projected Spend */}
-      <div className="min-w-[180px] flex-shrink-0 md:min-w-0">
-        <KpiCard
-          label="Annual Projected Spend"
-          value={formatCurrency(annualProjected)}
-          isLoading={isLoading}
-        />
-      </div>
+      ))}
     </div>
   );
 }
