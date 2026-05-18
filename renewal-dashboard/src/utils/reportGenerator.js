@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { format, parseISO } from 'date-fns';
-import { getStatus, getDaysUntil, formatCurrency, getNextRenewalDate } from './renewalUtils';
+import { getStatusFull, getDaysUntilUpcoming, formatCurrency, getUpcomingRenewalDate } from './renewalUtils';
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -145,9 +145,9 @@ function checkPage(doc, y, needed, renewal, generatedAt, pageRef) {
 export function downloadReport(renewal, info, vendorFields = null, vendorEntries = null) {
   const doc          = new jsPDF({ unit: 'mm', format: 'a4' });
   const generatedAt  = format(new Date(), 'MMMM d, yyyy  ·  h:mm a');
-  const status       = getStatus(renewal.renewalDate, renewal.purchaseDate);
-  const days         = getDaysUntil(renewal.renewalDate);
-  const nextDate     = getNextRenewalDate(renewal.renewalDate, renewal.billingCycle);
+  const status       = getStatusFull(renewal);
+  const days         = getDaysUntilUpcoming(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
+  const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
   const monthly      = renewal.billingCycle === 'monthly' ? renewal.amount : renewal.amount / 12;
   const yearly       = renewal.billingCycle === 'yearly'  ? renewal.amount : renewal.amount * 12;
   const sc           = statusColors(status);
@@ -299,10 +299,10 @@ export function downloadReport(renewal, info, vendorFields = null, vendorEntries
   y += 1;
   const renewalRows = [
     ['Current Status',        sc.label],
-    ['Current Renewal Date',  format(parseISO(renewal.renewalDate), 'MMMM d, yyyy')],
-    ['Upcoming Renewal',      format(nextDate, 'MMMM d, yyyy')],
+    ...(renewal.purchaseDate ? [['Purchase Date', format(parseISO(renewal.purchaseDate), 'MMMM d, yyyy')]] : []),
+    ['Upcoming Renewal',      format(upcomingDate, 'MMMM d, yyyy')],
     ['Days Until Renewal',    days < 0 ? `${Math.abs(days)} day(s) overdue` : days === 0 ? 'Due today' : `${days} day(s)`],
-    ['Reminder Set',          `${renewal.reminderDays} day(s) before renewal`],
+    ['Renewal Alert',         `${renewal.reminderDays} day(s) before renewal`],
   ];
   renewalRows.forEach((r, i) => { y = infoRow(doc, y, r[0], r[1], i % 2 === 0); });
   y += 5;
@@ -433,7 +433,7 @@ export function generateCSV(renewals) {
     return header;
   }
   const rows = renewals.map(r => {
-    const status = getStatus(r.renewalDate, r.purchaseDate);
+    const status = getStatusFull(r);
     return CSV_COLUMNS.map(col => {
       if (col === 'status') return escapeCSV(status);
       return escapeCSV(r[col]);
@@ -481,7 +481,7 @@ export function downloadPDFReport(renewals) {
     if (r.billingCycle === 'yearly') return sum + (r.amount || 0) / 12;
     return sum;
   }, 0);
-  const overdue = renewals.filter(r => getStatus(r.renewalDate, r.purchaseDate) === 'overdue').length;
+  const overdue = renewals.filter(r => getStatusFull(r) === 'overdue').length;
 
   y = sectionHeader(doc, y, 'SUMMARY');
   y += 1;
@@ -503,12 +503,12 @@ export function downloadPDFReport(renewals) {
 
     // Table header
     const cols = [
-      { label: 'Name',         x: MARGIN,      w: 40 },
-      { label: 'Vendor',       x: MARGIN + 40, w: 35 },
-      { label: 'Amount',       x: MARGIN + 75, w: 25 },
-      { label: 'Cycle',        x: MARGIN + 100, w: 20 },
-      { label: 'Renewal Date', x: MARGIN + 120, w: 30 },
-      { label: 'Status',       x: MARGIN + 150, w: 24 },
+      { label: 'Name',             x: MARGIN,       w: 40 },
+      { label: 'Vendor',           x: MARGIN + 40,  w: 35 },
+      { label: 'Amount',           x: MARGIN + 75,  w: 25 },
+      { label: 'Cycle',            x: MARGIN + 100, w: 20 },
+      { label: 'Upcoming Renewal', x: MARGIN + 120, w: 30 },
+      { label: 'Status',           x: MARGIN + 150, w: 24 },
     ];
 
     rect(doc, MARGIN, y, CONTENT, 7, C.gray200);
@@ -536,7 +536,7 @@ export function downloadPDFReport(renewals) {
       }
 
       if (i % 2 === 0) rect(doc, MARGIN, y, CONTENT, 7.5, C.gray50);
-      const status = getStatus(r.renewalDate, r.purchaseDate);
+      const status = getStatusFull(r);
       const sc = statusColors(status);
 
       setFont(doc, 'normal', 8);
@@ -547,7 +547,8 @@ export function downloadPDFReport(renewals) {
       doc.text(formatCurrency(r.amount || 0), cols[2].x + 2, y + 5);
       setTextColor(doc, C.gray700);
       doc.text(String(r.billingCycle || ''), cols[3].x + 2, y + 5);
-      doc.text(String(r.renewalDate || ''), cols[4].x + 2, y + 5);
+      const upcomingDate = getUpcomingRenewalDate(r.purchaseDate, r.renewalDate, r.billingCycle);
+      doc.text(format(upcomingDate, 'MMM d, yyyy'), cols[4].x + 2, y + 5);
       setTextColor(doc, sc.text);
       doc.text(sc.label, cols[5].x + 2, y + 5);
       y += 7.5;

@@ -24,24 +24,8 @@ class RenewalController extends Controller
             });
         }
 
-        // Status filter
-        if ($status = $request->query('status')) {
-            match ($status) {
-                'overdue'   => $query->overdue(),
-                'upcoming'  => $query->upcoming(),
-                'due-today' => $query->whereDate('renewal_date', today()),
-                'active'    => $query->where(function($q) {
-                    // renewal > 30 days away OR has a purchase_date set (live subscription)
-                    $q->where('renewal_date', '>', today()->addDays(30))
-                      ->orWhere(function($q2) {
-                          $q2->whereNotNull('purchase_date')
-                             ->where('purchase_date', '<=', today())
-                             ->where('renewal_date', '>', today());
-                      });
-                }),
-                default     => null,
-            };
-        }
+        // Status filter — applied after fetching since upcoming/overdue are computed
+        $statusFilter = $request->query('status');
 
         // Category filter
         if ($category = $request->query('category')) {
@@ -51,13 +35,22 @@ class RenewalController extends Controller
         // Sorting
         $sortBy  = $request->query('sort_by', 'renewal_date');
         $sortDir = $request->query('sort_dir', 'asc');
-        $allowed = ['name', 'vendor', 'amount', 'renewal_date', 'created_at'];
+        $allowed = ['name', 'vendor', 'amount', 'renewal_date', 'purchase_date', 'created_at'];
 
         if (in_array($sortBy, $allowed)) {
             $query->orderBy($sortBy, $sortDir === 'desc' ? 'desc' : 'asc');
         }
 
-        return RenewalResource::collection($query->get());
+        $results = $query->get();
+
+        // Apply computed status filter in PHP
+        if ($statusFilter && $statusFilter !== 'all') {
+            $results = $results->filter(function ($r) use ($statusFilter) {
+                return $r->status === $statusFilter;
+            });
+        }
+
+        return RenewalResource::collection($results);
     }
 
     public function store(RenewalRequest $request): JsonResponse
@@ -94,13 +87,18 @@ class RenewalController extends Controller
 
     public function stats(Request $request): JsonResponse
     {
-        $renewals = $request->user()->renewals();
+        $allRenewals = $request->user()->renewals()->get();
 
-        $total    = (clone $renewals)->count();
-        $upcoming = (clone $renewals)->upcoming()->count();
-        $overdue  = (clone $renewals)->overdue()->count();
+        $total    = $allRenewals->count();
+        $upcoming = $allRenewals->filter(function ($r) {
+            $diff = \Carbon\Carbon::today()->diffInDays($r->upcoming_renewal_date, false);
+            return $diff >= 0 && $diff <= 30;
+        })->count();
+        $overdue  = $allRenewals->filter(function ($r) {
+            return \Carbon\Carbon::today()->diffInDays($r->upcoming_renewal_date, false) < 0;
+        })->count();
 
-        $monthlySpend = (clone $renewals)->get()->sum(function ($r) {
+        $monthlySpend = $allRenewals->sum(function ($r) {
             return $r->monthly_amount;
         });
 

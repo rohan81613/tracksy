@@ -14,7 +14,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import RenewalForm from '../components/renewals/RenewalForm';
 import DeleteConfirm from '../components/renewals/DeleteConfirm';
-import { getStatus, getDaysUntil, formatCurrency, getNextRenewalDate } from '../utils/renewalUtils';
+import { getStatusFull, getDaysUntilUpcoming, formatCurrency, getUpcomingRenewalDate } from '../utils/renewalUtils';
 import { downloadReport } from '../utils/reportGenerator';
 
 // ─── Vendor static data ───────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ function StatPill({ label, value, color }) {
 }
 
 // ─── Timeline Component ───────────────────────────────────────────────────────
-function RenewalTimeline({ renewal, nextDate, days }) {
+function RenewalTimeline({ renewal, upcomingDate, days }) {
   const events = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -238,14 +238,13 @@ function RenewalTimeline({ renewal, nextDate, days }) {
     });
   }
 
-  // 2. Calculate all past renewals between purchase and current renewal
+  // 2. All past renewals between purchase date and upcoming renewal date
   if (renewal.purchaseDate) {
     const purchaseDate = parseISO(renewal.purchaseDate);
-    const currentRenewal = parseISO(renewal.renewalDate);
     let iterDate = renewal.billingCycle === 'yearly' ? addYears(purchaseDate, 1) : addMonths(purchaseDate, 1);
     let count = 1;
 
-    while (iterDate < currentRenewal && count < 50) {
+    while (iterDate < upcomingDate && count < 50) {
       events.push({
         type: 'past-renewal',
         date: iterDate,
@@ -258,37 +257,30 @@ function RenewalTimeline({ renewal, nextDate, days }) {
     }
   }
 
-  // 3. Current renewal date
-  const currentColor = days < 0 ? 'red' : days === 0 ? 'blue' : days <= 7 ? 'amber' : 'emerald';
-  events.push({
-    type: 'current',
-    date: parseISO(renewal.renewalDate),
-    label: 'Current Renewal',
-    icon: HiRefresh,
-    color: currentColor,
-    badge: days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d remaining`,
-  });
-
-  // 4. Upcoming renewal
+  // 3. Upcoming renewal date (the next one from today)
   events.push({
     type: 'upcoming',
-    date: nextDate,
+    date: upcomingDate,
     label: 'Upcoming Renewal',
     icon: HiRefresh,
-    color: 'blue',
+    color: days === 0 ? 'blue' : days <= 7 ? 'amber' : 'blue',
     highlight: true,
+    badge: days === 0 ? 'Due today' : days < 0 ? `${Math.abs(days)}d overdue` : `${days}d remaining`,
   });
 
-  // 5. Reminder alert date
-  const reminderDate = new Date(parseISO(renewal.renewalDate).getTime() - renewal.reminderDays * 86400000);
+  // 4. Renewal alert date (upcoming renewal minus reminder days)
+  const reminderDate = new Date(upcomingDate.getTime() - renewal.reminderDays * 86400000);
   events.push({
     type: 'reminder',
     date: reminderDate,
-    label: 'Reminder Alert',
+    label: 'Renewal Alert',
     icon: HiBell,
     color: 'amber',
     sub: `${renewal.reminderDays}d before renewal`,
   });
+
+  // Sort events by date ascending
+  events.sort((a, b) => a.date - b.date);
 
   const colorMap = {
     gray:    { bg: 'bg-gray-100',    icon: 'text-gray-400',    text: 'text-gray-700',    badge: 'bg-gray-50 text-gray-600' },
@@ -401,9 +393,9 @@ export default function VendorProfile() {
     );
   }
 
-  const status = getStatus(renewal.renewalDate, renewal.purchaseDate);
-  const days = getDaysUntil(renewal.renewalDate);
-  const nextDate = getNextRenewalDate(renewal.renewalDate, renewal.billingCycle);
+  const status = getStatusFull(renewal);
+  const days = getDaysUntilUpcoming(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
+  const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
   const monthlyAmount = renewal.billingCycle === 'monthly' ? renewal.amount : renewal.amount / 12;
   const yearlyAmount  = renewal.billingCycle === 'yearly'  ? renewal.amount : renewal.amount * 12;
 
@@ -602,7 +594,7 @@ export default function VendorProfile() {
 
             {/* Timeline */}
             <div className="px-6 py-5">
-              <RenewalTimeline renewal={renewal} nextDate={nextDate} days={days} />
+              <RenewalTimeline renewal={renewal} upcomingDate={upcomingDate} days={days} />
             </div>
           </Card>
 

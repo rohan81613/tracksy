@@ -4,7 +4,7 @@ import {
   eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths, isToday
 } from 'date-fns';
 import { HiChevronLeft, HiChevronRight } from 'react-icons/hi';
-import { getStatus } from '../../utils/renewalUtils';
+import { getStatusFull, getUpcomingRenewalDate } from '../../utils/renewalUtils';
 import Badge from '../ui/Badge';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
@@ -32,12 +32,14 @@ export default function CalendarView({ renewals }) {
     return eachDayOfInterval({ start, end });
   }, [currentDate]);
 
+  // Map renewals by their upcoming renewal date (purchase-date-aware)
   const renewalsByDate = useMemo(() => {
     const map = {};
     renewals.forEach(r => {
-      const key = r.renewalDate;
+      const upcomingDate = getUpcomingRenewalDate(r.purchaseDate, r.renewalDate, r.billingCycle);
+      const key = format(upcomingDate, 'yyyy-MM-dd');
       if (!map[key]) map[key] = [];
-      map[key].push(r);
+      map[key].push({ ...r, _upcomingDate: upcomingDate });
     });
     return map;
   }, [renewals]);
@@ -134,7 +136,7 @@ export default function CalendarView({ renewals }) {
 
                 <div className="space-y-0.5">
                   {dayRenewals.slice(0, 2).map(r => {
-                    const status = getStatus(r.renewalDate, r.purchaseDate);
+                    const status = getStatusFull(r);
                     return (
                       <div
                         key={r.id}
@@ -169,13 +171,18 @@ export default function CalendarView({ renewals }) {
       >
         <div className="space-y-3">
           {selectedRenewals.map(r => {
-            const status = getStatus(r.renewalDate, r.purchaseDate);
+            const status = getStatusFull(r);
             return (
               <div key={r.id} className="flex items-start justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{r.name}</p>
                   <p className="text-xs text-gray-500">{r.vendor}</p>
                   <p className="text-xs text-gray-400 capitalize mt-0.5">{r.billingCycle}</p>
+                  {r.purchaseDate && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Purchased: {format(parseISO(r.purchaseDate), 'MMM d, yyyy')}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-gray-900">{formatCurrency(r.amount)}</p>

@@ -51,30 +51,20 @@ class Renewal extends Model
 
     public function getStatusAttribute(): string
     {
-        $today = Carbon::today();
-        $diff  = $today->diffInDays($this->renewal_date, false);
+        $today    = Carbon::today();
+        $upcoming = $this->getUpcomingRenewalDateAttribute();
+        $diff     = $today->diffInDays($upcoming, false);
 
-        // If renewal date is past → overdue
         if ($diff < 0) return 'overdue';
-
-        // If renewal date is today → due-today
         if ($diff === 0) return 'due-today';
-
-        // If purchase date is today or in the past (recently purchased),
-        // and renewal date is in the future → active (subscription is live)
-        if ($this->purchase_date && $this->purchase_date->lte($today) && $diff > 0) {
-            return 'active';
-        }
-
-        // Within 30 days → upcoming
         if ($diff <= 30) return 'upcoming';
-
         return 'active';
     }
 
     public function getDaysUntilRenewalAttribute(): int
     {
-        return (int) Carbon::today()->diffInDays($this->renewal_date, false);
+        $upcoming = $this->getUpcomingRenewalDateAttribute();
+        return (int) Carbon::today()->diffInDays($upcoming, false);
     }
 
     public function getMonthlyAmountAttribute(): float
@@ -91,39 +81,83 @@ class Renewal extends Model
             : (float) $this->amount * 12;
     }
 
-    public function getNextRenewalDateAttribute(): Carbon
+    /**
+     * Computes the next upcoming renewal date based on purchase_date and billing_cycle.
+     * Starting from purchase_date, advances by one billing cycle at a time until
+     * the date is today or in the future.
+     * Falls back to renewal_date-based calculation when purchase_date is not set.
+     */
+    public function getUpcomingRenewalDateAttribute(): Carbon
     {
-        $date  = $this->renewal_date->copy();
         $today = Carbon::today();
 
-        if ($date->gte($today)) {
-            return $this->billing_cycle === 'yearly'
-                ? $date->addYear()
-                : $date->addMonth();
+        if ($this->purchase_date) {
+            $anchor = $this->purchase_date->copy();
+            $iterations = 0;
+            while ($anchor->lt($today) && $iterations < 1200) {
+                $anchor = $this->billing_cycle === 'yearly'
+                    ? $anchor->addYear()
+                    : $anchor->addMonth();
+                $iterations++;
+            }
+            return $anchor;
         }
 
-        return $this->billing_cycle === 'yearly'
-            ? $today->addYear()
-            : $today->addMonth();
+        // Fallback: advance renewal_date until >= today
+        $anchor = $this->renewal_date->copy();
+        $iterations = 0;
+        while ($anchor->lt($today) && $iterations < 1200) {
+            $anchor = $this->billing_cycle === 'yearly'
+                ? $anchor->addYear()
+                : $anchor->addMonth();
+            $iterations++;
+        }
+        return $anchor;
+    }
+
+    /**
+     * @deprecated Use upcoming_renewal_date instead.
+     */
+    public function getNextRenewalDateAttribute(): Carbon
+    {
+        return $this->getUpcomingRenewalDateAttribute();
     }
 
     // ── Scopes ───────────────────────────────────────────────────────────────
 
+    /**
+     * Upcoming scope: renewals whose computed upcoming_renewal_date falls within the next $days days.
+     * Because the upcoming date is computed (not stored), we fetch candidates and filter in PHP.
+     */
     public function scopeUpcoming($query, int $days = 30)
     {
-        return $query->whereBetween('renewal_date', [
-            Carbon::today(),
-            Carbon::today()->addDays($days),
-        ]);
+        $today = Carbon::today();
+        // Fetch all non-deleted renewals for this user and filter by computed upcoming date
+        return $query->get()->filter(function ($renewal) use ($today, $days) {
+            $upcoming = $renewal->upcoming_renewal_date;
+            $diff = $today->diffInDays($upcoming, false);
+            return $diff >= 0 && $diff <= $days;
+        });
     }
 
     public function scopeOverdue($query)
     {
-        return $query->where('renewal_date', '<', Carbon::today());
+        // Overdue: upcoming_renewal_date is in the past
+        return $query->get()->filter(function ($renewal) {
+            $diff = Carbon::today()->diffInDays($renewal->upcoming_renewal_date, false);
+            return $diff < 0;
+        });
     }
 
     public function scopeDueForReminder($query)
     {
-        return $query->whereRaw('DATE_SUB(renewal_date, INTERVAL reminder_days DAY) = CURDATE()');
+        // SQLite-compatible: filter in PHP after fetching candidates within the next 30 days
+        return $query->whereBetween('renewal_date', [
+            Carbon::today(),
+            Carbon::today()->addDays(30),
+        ])->get()->filter(function ($renewal) {
+            $reminderDate = Carbon::parse($renewal->renewal_date)->subDays($renewal->reminder_days);
+            return $reminderDate->isToday();
+        });
     }
 }

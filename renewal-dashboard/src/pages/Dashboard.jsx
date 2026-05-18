@@ -6,7 +6,7 @@ import RenewalForm from '../components/renewals/RenewalForm';
 import ImportModal from '../components/import/ImportModal';
 import Button from '../components/ui/Button';
 import { HiPlus, HiSearch, HiDownload } from 'react-icons/hi';
-import { getStatus, getDaysUntil } from '../utils/renewalUtils';
+import { getStatusFull, getDaysUntilUpcoming } from '../utils/renewalUtils';
 
 export default function Dashboard() {
   const { renewals, stats, isLoading, searchQuery, setSearchQuery, statusFilter, setStatusFilter } = useRenewal();
@@ -34,7 +34,7 @@ export default function Dashboard() {
     return renewals.filter(r => {
       const q = searchQuery.toLowerCase();
       const matchSearch = !q || r.name.toLowerCase().includes(q) || r.vendor.toLowerCase().includes(q);
-      const status = getStatus(r.renewalDate, r.purchaseDate);
+      const status = getStatusFull(r);
       const matchStatus = statusFilter === 'all' || status === statusFilter;
       return matchSearch && matchStatus;
     });

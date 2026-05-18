@@ -33,15 +33,23 @@ export function AuthProvider({ children }) {
         const response = await api.get('/api/auth/me');
         setCurrentUser(response.data.user ?? response.data);
       } catch (err) {
-        if (err.response?.status === 401) {
-          localStorage.removeItem(TOKEN_KEY);
-          setCurrentUser(null);
-        }
+        // Any error (401, network, etc.) — clear token and show login
+        localStorage.removeItem(TOKEN_KEY);
+        setCurrentUser(null);
       } finally {
         setAuthLoading(false);
       }
     }
     rehydrate();
+  }, []);
+
+  // Listen for 401 events dispatched by api.js interceptor
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+    };
+    window.addEventListener('tracksy:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('tracksy:unauthorized', handleUnauthorized);
   }, []);
 
   const signup = useCallback(async (name, email, password, company = '') => {

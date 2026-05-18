@@ -5,7 +5,7 @@ import RenewalForm from '../components/renewals/RenewalForm';
 import ImportModal from '../components/import/ImportModal';
 import Button from '../components/ui/Button';
 import { HiPlus, HiSearch, HiDownload } from 'react-icons/hi';
-import { getStatus } from '../utils/renewalUtils';
+import { getStatusFull } from '../utils/renewalUtils';
 
 export default function Renewals() {
   const { renewals, isLoading, searchQuery, setSearchQuery, statusFilter, setStatusFilter } = useRenewal();
@@ -16,7 +16,7 @@ export default function Renewals() {
     return renewals.filter(r => {
       const q = searchQuery.toLowerCase();
       const matchSearch = !q || r.name.toLowerCase().includes(q) || r.vendor.toLowerCase().includes(q) || (r.category || '').toLowerCase().includes(q);
-      const status = getStatus(r.renewalDate, r.purchaseDate);
+      const status = getStatusFull(r);
       const matchStatus = statusFilter === 'all' || status === statusFilter;
       return matchSearch && matchStatus;
     });
@@ -24,7 +24,10 @@ export default function Renewals() {
 
   const counts = useMemo(() => {
     const c = { all: renewals.length, active: 0, upcoming: 0, 'due-today': 0, overdue: 0 };
-    renewals.forEach(r => { c[getStatus(r.renewalDate, r.purchaseDate)] = (c[getStatus(r.renewalDate, r.purchaseDate)] || 0) + 1; });
+    renewals.forEach(r => {
+      const s = getStatusFull(r);
+      c[s] = (c[s] || 0) + 1;
+    });
     return c;
   }, [renewals]);
 
