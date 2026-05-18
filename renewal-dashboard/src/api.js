@@ -87,8 +87,7 @@ api.interceptors.response.use(
       const { status } = error.response;
       if (status === 401) {
         localStorage.removeItem('tracksy_token');
-        // Dispatch event so AuthContext can react without a full page reload
-        window.dispatchEvent(new Event('tracksy:unauthorized'));
+        window.location.href = '/login';
         throw error;
       }
       if (status === 422) {

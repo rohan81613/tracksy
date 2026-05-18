@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { HiDotsVertical, HiPencil, HiTrash, HiEye, HiChevronUp, HiChevronDown, HiSelector } from 'react-icons/hi';
 import Badge from '../ui/Badge';
 import { SkeletonTable } from '../ui/Skeleton';
-import { getStatusFull, formatCurrency, getUpcomingRenewalDate } from '../../utils/renewalUtils';
+import { getStatus, formatCurrency, getNextRenewalDate } from '../../utils/renewalUtils';
 import { useRenewal } from '../../context/RenewalContext';
 import RenewalForm from './RenewalForm';
 import DeleteConfirm from './DeleteConfirm';
@@ -96,9 +96,9 @@ export default function RenewalsTable({ renewals, isLoading }) {
     return [...renewals].sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
-      if (sortConfig.key === 'renewalDate' || sortConfig.key === 'purchaseDate') {
-        aVal = aVal ? new Date(aVal) : new Date(0);
-        bVal = bVal ? new Date(bVal) : new Date(0);
+      if (sortConfig.key === 'renewalDate') {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
       } else if (sortConfig.key === 'amount') {
         aVal = Number(aVal);
         bVal = Number(bVal);
@@ -113,13 +113,13 @@ export default function RenewalsTable({ renewals, isLoading }) {
   }, [renewals, sortConfig]);
 
   const cols = [
-    { key: 'name',          label: 'Name',              sortable: true  },
-    { key: 'vendor',        label: 'Vendor',            sortable: true  },
-    { key: 'amount',        label: 'Amount',            sortable: true  },
-    { key: 'purchaseDate',  label: 'Purchase Date',     sortable: true  },
-    { key: 'nextRenewal',   label: 'Upcoming Renewal',  sortable: false },
-    { key: 'status',        label: 'Status',            sortable: false },
-    { key: 'actions',       label: 'Actions',           sortable: false },
+    { key: 'name',        label: 'Name',                sortable: true  },
+    { key: 'vendor',      label: 'Vendor',              sortable: true  },
+    { key: 'amount',      label: 'Amount',              sortable: true  },
+    { key: 'renewalDate', label: 'Renewal Date',        sortable: true  },
+    { key: 'nextRenewal', label: 'Upcoming Renewal',    sortable: false },
+    { key: 'status',      label: 'Status',              sortable: false },
+    { key: 'actions',     label: 'Actions',             sortable: false },
   ];
 
   return (
@@ -160,8 +160,8 @@ export default function RenewalsTable({ renewals, isLoading }) {
               </tr>
             ) : (
               sorted.map(renewal => {
-                const status = getStatusFull(renewal);
-                const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
+                const status = getStatus(renewal.renewalDate, renewal.purchaseDate);
+                const nextDate = getNextRenewalDate(renewal.renewalDate, renewal.billingCycle);
 
                 return (
                   <tr
@@ -208,17 +208,15 @@ export default function RenewalsTable({ renewals, isLoading }) {
                       <p className="text-xs text-gray-400 capitalize">{renewal.billingCycle}</p>
                     </td>
 
-                    {/* Purchase Date */}
+                    {/* Renewal Date */}
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {renewal.purchaseDate
-                        ? format(parseISO(renewal.purchaseDate), 'MMM d, yyyy')
-                        : <span className="text-gray-300">—</span>}
+                      {format(parseISO(renewal.renewalDate), 'MMM d, yyyy')}
                     </td>
 
-                    {/* Upcoming Renewal Date */}
+                    {/* Next Renewal Date */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-blue-600 font-medium">
-                        {format(upcomingDate, 'MMM d, yyyy')}
+                        {format(nextDate, 'MMM d, yyyy')}
                       </p>
                       <p className="text-xs text-gray-400 capitalize">{renewal.billingCycle}</p>
                     </td>

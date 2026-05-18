@@ -23,12 +23,11 @@ class RenewalResource extends JsonResource
             'currency'            => $this->currency ?? 'USD',
             'notes'               => $this->notes,
             // Computed
-            'status'                => $this->status,
-            'days_until_renewal'    => $this->days_until_renewal,
-            'monthly_amount'        => round($this->monthly_amount, 2),
-            'yearly_amount'         => round($this->yearly_amount, 2),
-            'upcoming_renewal_date' => $this->upcoming_renewal_date->format('Y-m-d'),
-            'next_renewal_date'     => $this->upcoming_renewal_date->format('Y-m-d'), // kept for backward compat
+            'status'              => $this->status,
+            'days_until_renewal'  => $this->days_until_renewal,
+            'monthly_amount'      => round($this->monthly_amount, 2),
+            'yearly_amount'       => round($this->yearly_amount, 2),
+            'next_renewal_date'   => $this->next_renewal_date->format('Y-m-d'),
             'created_at'          => $this->created_at->toISOString(),
             'updated_at'          => $this->updated_at->toISOString(),
         ];

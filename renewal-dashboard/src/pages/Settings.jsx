@@ -227,7 +227,7 @@ function DataTab({ renewals, onImport, onExport, onExportCSV, onReset }) {
         {[
           { label: 'Total Renewals', value: renewals.length, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Storage Used', value: `${(JSON.stringify(renewals).length / 1024).toFixed(1)} KB`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Data Source', value: 'Cloud DB', color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Data Source', value: 'localStorage', color: 'text-amber-600', bg: 'bg-amber-50' },
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>

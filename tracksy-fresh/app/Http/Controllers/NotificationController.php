@@ -14,8 +14,7 @@ class NotificationController extends Controller
         $notifications  = [];
 
         foreach ($renewals as $renewal) {
-            $upcomingDate = $renewal->upcoming_renewal_date;
-            $days = Carbon::today()->diffInDays($upcomingDate, false);
+            $days = Carbon::today()->diffInDays($renewal->renewal_date, false);
 
             if ($days >= 0 && $days <= $renewal->reminder_days) {
                 $notifications[] = [

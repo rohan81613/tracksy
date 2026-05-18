@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import Modal from '../ui/Modal';
 import Badge from '../ui/Badge';
-import { getStatusFull, getDaysUntilUpcoming, formatCurrency, getUpcomingRenewalDate } from '../../utils/renewalUtils';
+import { getStatus, getDaysUntil, formatCurrency, getNextRenewalDate } from '../../utils/renewalUtils';
 import {
   HiOfficeBuilding, HiCurrencyDollar, HiCalendar, HiBell,
   HiTag, HiDocumentText, HiRefresh,
@@ -24,12 +24,9 @@ function InfoRow({ icon: Icon, label, value, valueClass = '' }) {
 export default function ViewRenewal({ isOpen, onClose, renewal, onEdit }) {
   if (!renewal) return null;
 
-  const status = getStatusFull(renewal);
-  const days = getDaysUntilUpcoming(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
-  const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
-
-  // Reminder alert = upcoming renewal date minus reminder days
-  const reminderDate = new Date(upcomingDate.getTime() - renewal.reminderDays * 86400000);
+  const status = getStatus(renewal.renewalDate, renewal.purchaseDate);
+  const days = getDaysUntil(renewal.renewalDate);
+  const nextDate = getNextRenewalDate(renewal.renewalDate, renewal.billingCycle);
 
   const daysLabel =
     days < 0
@@ -68,23 +65,13 @@ export default function ViewRenewal({ isOpen, onClose, renewal, onEdit }) {
         {daysLabel}
       </div>
 
-      {/* Details — purchase date → upcoming renewal → reminder alert chain */}
+      {/* Details */}
       <div className="space-y-0">
         <InfoRow icon={HiCurrencyDollar} label="Amount" value={`${formatCurrency(renewal.amount)} / ${renewal.billingCycle}`} />
-        {renewal.purchaseDate && (
-          <InfoRow icon={HiCalendar} label="Purchase Date" value={format(parseISO(renewal.purchaseDate), 'MMMM d, yyyy')} />
-        )}
-        <InfoRow
-          icon={HiRefresh}
-          label="Upcoming Renewal"
-          value={format(upcomingDate, 'MMMM d, yyyy')}
-          valueClass="text-blue-600"
-        />
-        <InfoRow
-          icon={HiBell}
-          label="Renewal Alert"
-          value={`${format(reminderDate, 'MMMM d, yyyy')} (${renewal.reminderDays}d before)`}
-        />
+        {renewal.purchaseDate && <InfoRow icon={HiCalendar} label="Purchase Date" value={format(parseISO(renewal.purchaseDate), 'MMMM d, yyyy')} />}
+        <InfoRow icon={HiCalendar} label="Current Renewal Date" value={format(parseISO(renewal.renewalDate), 'MMMM d, yyyy')} />
+        <InfoRow icon={HiRefresh} label="Upcoming Renewal Date" value={format(nextDate, 'MMMM d, yyyy')} valueClass="text-blue-600" />
+        <InfoRow icon={HiBell} label="Reminder" value={`${renewal.reminderDays} day${renewal.reminderDays !== 1 ? 's' : ''} before renewal`} />
         {renewal.category && <InfoRow icon={HiTag} label="Category" value={renewal.category} />}
         {renewal.notes && <InfoRow icon={HiDocumentText} label="Notes" value={renewal.notes} />}
       </div>

@@ -1,98 +1,28 @@
-import { differenceInDays, parseISO, addMonths, addYears, isBefore, isAfter } from 'date-fns';
+import { differenceInDays, parseISO, isToday, isPast, isFuture, addDays, addMonths, addYears } from 'date-fns';
 
-/**
- * Computes the next upcoming renewal date based on purchase date and billing cycle.
- *
- * Logic: Starting from purchaseDate, advance by billingCycle increments until
- * we find the first date that is today or in the future.
- *
- * If no purchaseDate is provided, falls back to renewalDate-based calculation.
- */
-export function getUpcomingRenewalDate(purchaseDate, renewalDate, billingCycle) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  if (purchaseDate) {
-    let anchor = parseISO(purchaseDate);
-    anchor.setHours(0, 0, 0, 0);
-
-    // Advance anchor by one cycle at a time until it's >= today
-    let iterations = 0;
-    while (isBefore(anchor, today) && iterations < 1200) {
-      anchor = billingCycle === 'yearly' ? addYears(anchor, 1) : addMonths(anchor, 1);
-      iterations++;
-    }
-    return anchor;
-  }
-
-  // Fallback: use renewalDate
-  const rDate = parseISO(renewalDate);
-  rDate.setHours(0, 0, 0, 0);
-  if (!isBefore(rDate, today)) return rDate;
-  // renewalDate is in the past — advance one cycle at a time
-  let anchor = rDate;
-  let iterations = 0;
-  while (isBefore(anchor, today) && iterations < 1200) {
-    anchor = billingCycle === 'yearly' ? addYears(anchor, 1) : addMonths(anchor, 1);
-    iterations++;
-  }
-  return anchor;
-}
-
-/**
- * Days until the upcoming renewal (can be negative if overdue, but with new logic
- * upcoming is always >= today when purchaseDate is set).
- */
-export function getDaysUntilUpcoming(purchaseDate, renewalDate, billingCycle) {
-  const upcoming = getUpcomingRenewalDate(purchaseDate, renewalDate, billingCycle);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return differenceInDays(upcoming, today);
-}
-
-/**
- * Status based on upcoming renewal date (purchase-date-aware).
- * - overdue: upcoming renewal is in the past (only possible when no purchaseDate)
- * - due-today: upcoming renewal is today
- * - upcoming: within 30 days
- * - active: more than 30 days away
- */
 export function getStatus(renewalDate, purchaseDate = null) {
+  const date = parseISO(renewalDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const diff = differenceInDays(date, today);
 
-  const upcomingDate = getUpcomingRenewalDate(purchaseDate, renewalDate, 'monthly'); // billingCycle not available here, use renewalDate fallback
-  // NOTE: getStatus is called with renewalDate + purchaseDate only (no billingCycle).
-  // We compute status from the raw renewalDate diff for backward compat with badge display,
-  // but treat any subscription with a valid purchaseDate as active unless renewal is today/overdue.
-
-  const rDate = parseISO(renewalDate);
-  rDate.setHours(0, 0, 0, 0);
-  const diff = differenceInDays(rDate, today);
-
-  if (diff < 0) {
-    // renewalDate is past — if purchaseDate exists, subscription is still active (upcoming computed)
-    if (purchaseDate) return 'active';
-    return 'overdue';
-  }
-  if (diff === 0) return 'due-today';
-  if (diff <= 30) return 'upcoming';
-  return 'active';
-}
-
-/**
- * Status using full renewal data including billingCycle for accurate upcoming calculation.
- */
-export function getStatusFull(renewal) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
-  const diff = differenceInDays(upcomingDate, today);
-
+  // Past renewal date → overdue
   if (diff < 0) return 'overdue';
+
+  // Renewal is today → due-today
   if (diff === 0) return 'due-today';
+
+  // If purchase date exists and is today or in the past,
+  // the subscription is live/active regardless of how soon renewal is
+  if (purchaseDate) {
+    const pDate = parseISO(purchaseDate);
+    pDate.setHours(0, 0, 0, 0);
+    if (pDate <= today && diff > 0) return 'active';
+  }
+
+  // Within 30 days → upcoming
   if (diff <= 30) return 'upcoming';
+
   return 'active';
 }
 
@@ -109,14 +39,10 @@ export function calculateStats(renewals) {
 
   const total = renewals.length;
   const upcoming = renewals.filter(r => {
-    const diff = getDaysUntilUpcoming(r.purchaseDate, r.renewalDate, r.billingCycle);
+    const diff = getDaysUntil(r.renewalDate);
     return diff >= 0 && diff <= 30;
   }).length;
-  const overdue = renewals.filter(r => {
-    // Only overdue if no purchaseDate and renewalDate is past
-    if (r.purchaseDate) return false;
-    return getDaysUntil(r.renewalDate) < 0;
-  }).length;
+  const overdue = renewals.filter(r => getDaysUntil(r.renewalDate) < 0).length;
 
   const monthlySpend = renewals.reduce((sum, r) => {
     if (r.billingCycle === 'monthly') return sum + r.amount;
@@ -130,11 +56,7 @@ export function calculateStats(renewals) {
 export function generateNotifications(renewals) {
   const notifications = [];
   renewals.forEach(renewal => {
-    const upcomingDate = getUpcomingRenewalDate(renewal.purchaseDate, renewal.renewalDate, renewal.billingCycle);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const days = differenceInDays(upcomingDate, today);
-
+    const days = getDaysUntil(renewal.renewalDate);
     if (days >= 0 && days <= renewal.reminderDays) {
       notifications.push({
         id: `notif-${renewal.id}`,
@@ -179,10 +101,14 @@ export function formatCurrencyWithCode(amount, currency = 'USD') {
   }).format(amount);
 }
 
-/**
- * @deprecated Use getUpcomingRenewalDate instead.
- * Kept for any legacy callers.
- */
 export function getNextRenewalDate(renewalDate, billingCycle) {
-  return getUpcomingRenewalDate(null, renewalDate, billingCycle);
+  const date = parseISO(renewalDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // If already in the future, next renewal is one cycle after current
+  if (date >= today) {
+    return billingCycle === 'yearly' ? addYears(date, 1) : addMonths(date, 1);
+  }
+  // If overdue, next renewal is one cycle from today
+  return billingCycle === 'yearly' ? addYears(today, 1) : addMonths(today, 1);
 }

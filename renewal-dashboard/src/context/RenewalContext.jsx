@@ -48,32 +48,21 @@ export function RenewalProvider({ children }) {
       params.sort_by = camelToSnake(sortConfig.key);
       params.sort_dir = sortConfig.direction;
 
-      const [renewalsRes, statsRes, categoriesRes, notifRes] = await Promise.allSettled([
+      const [renewalsRes, statsRes, categoriesRes, notifRes] = await Promise.all([
         api.get('/api/renewals', { params }),
         api.get('/api/renewals/stats'),
         api.get('/api/categories'),
         api.get('/api/notifications'),
       ]);
 
-      if (renewalsRes.status === 'fulfilled') {
-        setRenewals(renewalsRes.value.data.data ?? renewalsRes.value.data);
-      }
-      if (statsRes.status === 'fulfilled') {
-        setStats(statsRes.value.data);
-      }
-      if (categoriesRes.status === 'fulfilled') {
-        setCategories(categoriesRes.value.data.all ?? categoriesRes.value.data);
-      }
-      if (notifRes.status === 'fulfilled') {
-        setNotifications(prev => {
-          const readMap = new Map(prev.map(n => [n.id, n.read]));
-          const notifList = notifRes.value.data.notifications ?? notifRes.value.data;
-          return notifList.map(n => ({ ...n, read: readMap.get(n.id) ?? false }));
-        });
-      }
-    } catch (err) {
-      // Network-level failure — keep existing data, don't crash
-      console.error('fetchAll error:', err);
+      setRenewals(renewalsRes.data.data ?? renewalsRes.data);
+      setStats(statsRes.data);
+      setCategories(categoriesRes.data.all ?? categoriesRes.data);
+      setNotifications(prev => {
+        const readMap = new Map(prev.map(n => [n.id, n.read]));
+        const notifList = notifRes.data.notifications ?? notifRes.data;
+        return notifList.map(n => ({ ...n, read: readMap.get(n.id) ?? false }));
+      });
     } finally {
       setIsLoading(false);
     }
