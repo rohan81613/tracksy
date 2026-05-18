@@ -12,16 +12,16 @@ export function getStatus(renewalDate, purchaseDate = null) {
   // Renewal is today → due-today
   if (diff === 0) return 'due-today';
 
+  // Within 30 days → upcoming (takes priority over purchase date check)
+  if (diff <= 30) return 'upcoming';
+
   // If purchase date exists and is today or in the past,
-  // the subscription is live/active regardless of how soon renewal is
+  // the subscription is live/active (renewal is > 30 days away)
   if (purchaseDate) {
     const pDate = parseISO(purchaseDate);
     pDate.setHours(0, 0, 0, 0);
-    if (pDate <= today && diff > 0) return 'active';
+    if (pDate <= today) return 'active';
   }
-
-  // Within 30 days → upcoming
-  if (diff <= 30) return 'upcoming';
 
   return 'active';
 }

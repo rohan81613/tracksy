@@ -60,14 +60,13 @@ class Renewal extends Model
         // If renewal date is today → due-today
         if ($diff === 0) return 'due-today';
 
-        // If purchase date is today or in the past (recently purchased),
-        // and renewal date is in the future → active (subscription is live)
-        if ($this->purchase_date && $this->purchase_date->lte($today) && $diff > 0) {
+        // Within 30 days → upcoming (takes priority over purchase date check)
+        if ($diff <= 30) return 'upcoming';
+
+        // If purchase date is today or in the past and renewal > 30 days away → active
+        if ($this->purchase_date && $this->purchase_date->lte($today)) {
             return 'active';
         }
-
-        // Within 30 days → upcoming
-        if ($diff <= 30) return 'upcoming';
 
         return 'active';
     }

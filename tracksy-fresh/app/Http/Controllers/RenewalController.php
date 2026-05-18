@@ -30,15 +30,7 @@ class RenewalController extends Controller
                 'overdue'   => $query->overdue(),
                 'upcoming'  => $query->upcoming(),
                 'due-today' => $query->whereDate('renewal_date', today()),
-                'active'    => $query->where(function($q) {
-                    // renewal > 30 days away OR has a purchase_date set (live subscription)
-                    $q->where('renewal_date', '>', today()->addDays(30))
-                      ->orWhere(function($q2) {
-                          $q2->whereNotNull('purchase_date')
-                             ->where('purchase_date', '<=', today())
-                             ->where('renewal_date', '>', today());
-                      });
-                }),
+                'active'    => $query->where('renewal_date', '>', today()->addDays(30)),
                 default     => null,
             };
         }
